@@ -6,6 +6,7 @@ import os
 SOURCE_DIR = ".."  # Zdrojová složka
 TARGET_DIR = "out"  # Cílová složka
 DEBUG = False
+min_index = 10000000000
 
 # Vytvoření cílové složky, pokud neexistuje
 os.makedirs(TARGET_DIR, exist_ok=True)
@@ -20,6 +21,12 @@ def write_csv(filename, fieldnames, rows, append=False):
         if mode == 'w':  # Při prvním zápisu zapisujeme hlavičky
             writer.writeheader()
         writer.writerows(rows)
+
+
+def get_index():
+    global min_index
+    min_index += 1
+    return min_index
 
 
 # Funkce pro zpracování jednoho JSON souboru
@@ -56,24 +63,27 @@ def process_json_file(filepath):
         for author in paper.get("authors", []):
             authors.append({
                 "id": author.get("id"),
-                "name": author.get("name", ""),
-                "org": author.get("org", "")
+                "name": author.get("name", "")
             })
             paper_author_rel.append({
                 "paper_id": paper.get("id"),
-                "author_id": author.get("id")
+                "author_id": author.get("id"),
+                "org": author.get("org", "")
             })
 
         # Přidání venue a jeho vztahu
         if "venue" in paper and paper["venue"]:
+            new_id = 0
+            if paper["venue"].get("id", "") == "":
+                new_id = get_index()
             venues.append({
-                "id": paper["venue"].get("id"),
+                "id": paper["venue"].get("id", new_id),
                 "raw": paper["venue"].get("raw", ""),
                 "type": paper["venue"].get("type", "")
             })
             paper_venue_rel.append({
                 "paper_id": paper.get("id"),
-                "venue_id": paper["venue"].get("id")
+                "venue_id": paper["venue"].get("id", new_id)
             })
 
         # Přidání vztahů citací
@@ -95,7 +105,7 @@ def process_json_file(filepath):
             })
 
     # Odstranění duplicit z dat
-    authors = list({(author["id"], author["name"], author["org"]): author for author in authors}.values())
+    authors = list({(author["id"], author["name"]): author for author in authors}.values())
     venues = list({(venue["id"], venue["raw"], venue["type"]): venue for venue in venues}.values())
     fields_of_study = list({fos["name"]: fos for fos in fields_of_study}.values())
 
@@ -103,10 +113,10 @@ def process_json_file(filepath):
     write_csv('papers.csv',
               ["id", "title", "year", "n_citation", "page_end", "doc_type", "publisher", "volume", "issue", "doi"],
               papers, append=True)
-    write_csv('authors.csv', ["id", "name", "org"], authors, append=True)
+    write_csv('authors.csv', ["id", "name"], authors, append=True)
     write_csv('venues.csv', ["id", "raw", "type"], venues, append=True)
     write_csv('fields_of_study.csv', ["name"], fields_of_study, append=True)
-    write_csv('paper_author_rel.csv', ["paper_id", "author_id"], paper_author_rel, append=True)
+    write_csv('paper_author_rel.csv', ["paper_id", "author_id", "org"], paper_author_rel, append=True)
     write_csv('paper_venue_rel.csv', ["paper_id", "venue_id"], paper_venue_rel, append=True)
     write_csv('paper_reference_rel.csv', ["paper_id", "reference_id"], paper_reference_rel, append=True)
     write_csv('paper_fos_rel.csv', ["paper_id", "fos_name", "weight"], paper_fos_rel, append=True)
